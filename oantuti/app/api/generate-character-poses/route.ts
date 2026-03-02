@@ -1,7 +1,17 @@
 import { fal } from "@fal-ai/client";
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 const FAL_MODEL = "bria/fibo-edit/replace_object_by_text";
+
+type PoseResults = Record<"rock" | "paper" | "scissors", string>;
+
+// In-memory cache: image hash → pose URLs (saves 3 FAL calls per repeat upload)
+const poseCache = new Map<string, PoseResults>();
+
+function getImageHash(buffer: ArrayBuffer): string {
+  return createHash("sha256").update(Buffer.from(buffer)).digest("hex");
+}
 
 const INSTRUCTIONS: Record<"rock" | "paper" | "scissors", string> = {
   rock: "Replace the character's hands with both hands in rock gesture: closed fists, fingers curled into palms.",
@@ -20,6 +30,7 @@ export async function POST(request: NextRequest) {
   fal.config({ credentials: process.env.FAL_KEY });
 
   let imageUrl: string;
+  let imageHash: string;
 
   try {
     const formData = await request.formData();
@@ -30,6 +41,14 @@ export async function POST(request: NextRequest) {
         { error: "Please provide a valid image file" },
         { status: 400 },
       );
+    }
+
+    const buffer = await file.arrayBuffer();
+    imageHash = getImageHash(buffer);
+
+    const cached = poseCache.get(imageHash);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const url = await fal.storage.upload(file);
@@ -69,5 +88,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  poseCache.set(imageHash, { ...results });
   return NextResponse.json(results);
 }
