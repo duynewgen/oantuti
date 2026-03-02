@@ -47,6 +47,25 @@ body {
   animation: spriteReveal 0.3s ease-out 1;
 }
 
+@keyframes countdownPop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-countdown-pop {
+  animation: countdownPop 0.5s ease-out;
+}
+
 @keyframes spriteIdle {
   0%,
   100% {

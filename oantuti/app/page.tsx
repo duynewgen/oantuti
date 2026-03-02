@@ -183,12 +183,11 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<{ stop?: () => void } | null>(null);
   const processLockRef = useRef(false);
-  const stableCountRef = useRef(0);
-  const stableMoveRef = useRef<Move | null>(null);
-  const roundLockRef = useRef(false);
-  const resetTimerRef = useRef<number | null>(null);
-  const revealTimerRef = useRef<number | null>(null);
-  const animateTimerRef = useRef<number | null>(null);
+  const latestInferredMoveRef = useRef<Move | null>(null);
+  const countdownTimerRef = useRef<number | null>(null);
+  const resultTimerRef = useRef<number | null>(null);
+  const isRevealingRef = useRef(false);
+  const freezeDisplayedMovesRef = useRef(false);
   const fileUrlRef = useRef<string | null>(null);
   const playerHistoryRef = useRef<Move[]>([]);
 
@@ -206,6 +205,9 @@ export default function Home() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [opponentState, setOpponentState] = useState<OpponentState>("idle");
   const [animatedOpponentMove, setAnimatedOpponentMove] = useState<Move | null>(null);
+  const [countdown, setCountdown] = useState<3 | 2 | 1 | null>(null);
+  const [isRevealing, setIsRevealing] = useState(false);
+  const [roundsCompleted, setRoundsCompleted] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -281,83 +283,15 @@ export default function Home() {
         const inferred = inferMove(hand);
 
         if (inferred) {
-          setPlayerMove(inferred);
-
-          if (stableMoveRef.current === inferred) {
-            stableCountRef.current += 1;
-          } else {
-            stableMoveRef.current = inferred;
-            stableCountRef.current = 1;
-          }
-
-          if (stableCountRef.current >= 12 && !roundLockRef.current) {
-            roundLockRef.current = true;
-            playerHistoryRef.current = [...playerHistoryRef.current.slice(-5), inferred];
-
-            setStatus("Move locked. Opponent AI is thinking...");
-            setOpponentState("thinking");
-
-            if (animateTimerRef.current) {
-              window.clearInterval(animateTimerRef.current);
-            }
-
-            animateTimerRef.current = window.setInterval(() => {
-              const choices: Move[] = ["rock", "paper", "scissors"];
-              setAnimatedOpponentMove(choices[Math.floor(Math.random() * choices.length)]);
-            }, 170);
-
-            if (revealTimerRef.current) {
-              window.clearTimeout(revealTimerRef.current);
-            }
-
-            revealTimerRef.current = window.setTimeout(() => {
-              if (animateTimerRef.current) {
-                window.clearInterval(animateTimerRef.current);
-                animateTimerRef.current = null;
-              }
-
-              const opponent = pickAiMove(playerHistoryRef.current);
-              const round = getRoundResult(inferred, opponent);
-
-              setBotMove(opponent);
-              setAnimatedOpponentMove(opponent);
-              setOpponentState("reveal");
-              setResult(round);
-
-              if (round === "win") {
-                setPlayerScore((prev) => prev + 1);
-              } else if (round === "lose") {
-                setBotScore((prev) => prev + 1);
-              } else {
-                setDraws((prev) => prev + 1);
-              }
-
-              setStatus(`Round done: You ${round}. Change gesture for next round.`);
-
-              if (resetTimerRef.current) {
-                window.clearTimeout(resetTimerRef.current);
-              }
-
-              resetTimerRef.current = window.setTimeout(() => {
-                stableCountRef.current = 0;
-                stableMoveRef.current = null;
-                roundLockRef.current = false;
-                setOpponentState("idle");
-              }, 1200);
-            }, 1300);
-          } else if (!roundLockRef.current) {
-            setStatus(`Detected ${inferred}. Hold steady to lock your move.`);
-          }
-        } else if (!roundLockRef.current) {
-          stableCountRef.current = 0;
-          stableMoveRef.current = null;
-          setStatus("Hand found. Show a clear Rock, Paper, or Scissors sign.");
+          latestInferredMoveRef.current = inferred;
+          if (!isRevealingRef.current && !freezeDisplayedMovesRef.current) setPlayerMove(inferred);
+        } else {
+          latestInferredMoveRef.current = null;
+          if (!isRevealingRef.current && !freezeDisplayedMovesRef.current) setPlayerMove(null);
         }
-      } else if (!roundLockRef.current) {
-        setPlayerMove(null);
-        stableCountRef.current = 0;
-        stableMoveRef.current = null;
-        setStatus("No hand detected. Move your hand into camera view.");
+      } else {
+        latestInferredMoveRef.current = null;
+        if (!isRevealingRef.current && !freezeDisplayedMovesRef.current) setPlayerMove(null);
       }
 
       canvasCtx.restore();
@@ -381,53 +315,116 @@ export default function Home() {
     return () => {
       cameraRef.current?.stop?.();
       cameraRef.current = null;
-      if (resetTimerRef.current) {
-        window.clearTimeout(resetTimerRef.current);
+      if (countdownTimerRef.current) {
+        window.clearTimeout(countdownTimerRef.current);
       }
-      if (revealTimerRef.current) {
-        window.clearTimeout(revealTimerRef.current);
-      }
-      if (animateTimerRef.current) {
-        window.clearInterval(animateTimerRef.current);
+      if (resultTimerRef.current) {
+        window.clearTimeout(resultTimerRef.current);
       }
     };
   }, [scriptsReady]);
 
   useEffect(() => {
-    return () => {
-      if (fileUrlRef.current) {
-        URL.revokeObjectURL(fileUrlRef.current);
-      }
-    };
-  }, []);
+    isRevealingRef.current = isRevealing;
+  }, [isRevealing]);
 
-  const resultText = useMemo(() => {
-    if (!result) {
-      return "Waiting for first round...";
+  const startCountdown = useCallback(() => {
+    if (countdownTimerRef.current) {
+      window.clearTimeout(countdownTimerRef.current);
+      countdownTimerRef.current = null;
     }
 
+    const doReveal = () => {
+      setCountdown(null);
+      const capturedPlayer: Move =
+        latestInferredMoveRef.current ?? (["rock", "paper", "scissors"] as const)[Math.floor(Math.random() * 3)];
+      const opponent = pickAiMove(playerHistoryRef.current);
+      const round = getRoundResult(capturedPlayer, opponent);
+
+      playerHistoryRef.current = [...playerHistoryRef.current.slice(-5), capturedPlayer];
+
+      setPlayerMove(capturedPlayer);
+      setBotMove(opponent);
+      setAnimatedOpponentMove(opponent);
+      setOpponentState("reveal");
+      setResult(round);
+
+      if (round === "win") setPlayerScore((p) => p + 1);
+      else if (round === "lose") setBotScore((p) => p + 1);
+      else setDraws((p) => p + 1);
+
+      setStatus(`Round done: You ${round}!`);
+      isRevealingRef.current = true;
+      freezeDisplayedMovesRef.current = true;
+      setIsRevealing(true);
+      setRoundsCompleted((c) => c + 1);
+
+      if (resultTimerRef.current) window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = window.setTimeout(() => {
+        resultTimerRef.current = null;
+        isRevealingRef.current = false;
+        setIsRevealing(false);
+        setOpponentState("idle");
+        setStatus("Click Start for next round");
+      }, 2000);
+    };
+
+    const runStep = (step: 3 | 2 | 1) => {
+      freezeDisplayedMovesRef.current = false;
+      setAnimatedOpponentMove("rock");
+      setOpponentState("idle");
+      setCountdown(step);
+      setStatus(step === 3 ? "Get ready! 3..." : `${step}...`);
+      if (step === 3) setResult(null);
+      if (step === 1) {
+        countdownTimerRef.current = window.setTimeout(doReveal, 1000);
+      } else {
+        countdownTimerRef.current = window.setTimeout(
+          () => runStep((step - 1) as 2 | 1),
+          1000,
+        );
+      }
+    };
+
+    runStep(3);
+  }, []);
+
+  const canStart = scriptsReady && cartoonImage && countdown === null && !isRevealing;
+
+  useEffect(() => {
+    if (canStart && roundsCompleted === 0) {
+      setStatus("Click Start to begin");
+    }
+  }, [canStart, roundsCompleted]);
+
+  const resultText = useMemo(() => {
     if (result === "win") {
       return "You win this round";
     }
-
     if (result === "lose") {
       return "Opponent wins this round";
     }
-
-    return "It is a draw";
-  }, [result]);
+    if (result === "draw") {
+      return "It is a draw";
+    }
+    if (countdown !== null) {
+      return "Get ready!";
+    }
+    if (isRevealing) {
+      return "Reveal!";
+    }
+    return "Next round starting...";
+  }, [result, countdown, isRevealing]);
 
   const opponentLabel = useMemo(() => {
-    if (opponentState === "thinking") {
-      return "AI thinking";
+    if (countdown !== null) {
+      return `${countdown}...`;
     }
-
     if (opponentState === "reveal") {
-      return "Move locked";
+      return "Reveal!";
     }
-
     return "Ready";
-  }, [opponentState]);
+  }, [opponentState, countdown]);
 
   const onCartoonUpload = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -444,6 +441,7 @@ export default function Home() {
       setCharacterPoses(null);
       setGenerationStatus("generating");
       setGenerationError(null);
+      setRoundsCompleted(0);
 
       try {
         const formData = new FormData();
@@ -473,7 +471,7 @@ export default function Home() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#fef08a,_#bfdbfe_45%,_#86efac)] px-4 py-6 text-slate-900 md:px-8">
       <main className="mx-auto w-full max-w-6xl space-y-5">
         <section className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a] md:p-6">
-          <h1 className="text-2xl font-black uppercase tracking-wide md:text-3xl">Cartoon AI RPS Battle</h1>
+          <h1 className="text-2xl font-black uppercase tracking-wide md:text-3xl">OANTUTI - Rock, Paper, Scissors</h1>
           <p className="mt-1 text-sm font-semibold text-slate-700 md:text-base">
             Upload a character (e.g. Tom). AI animates its hands to play rock, paper, scissors.
           </p>
@@ -491,11 +489,30 @@ export default function Home() {
             <div className="rounded-2xl border-2 border-slate-900 bg-lime-100 p-3">
               <p className="text-xs font-bold uppercase">Live status</p>
               <p className="mt-2 text-sm font-bold md:text-base">{status}</p>
+              {canStart && (
+                <button
+                  type="button"
+                  onClick={startCountdown}
+                  className="mt-3 w-full rounded-xl border-2 border-slate-900 bg-emerald-500 px-4 py-3 font-bold uppercase text-white shadow-[4px_4px_0_#0f172a] transition hover:bg-emerald-600 hover:shadow-[2px_2px_0_#0f172a] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+                >
+                  {roundsCompleted === 0 ? "Start" : "Next round"}
+                </button>
+              )}
             </div>
           </div>
         </section>
 
-        <section className="grid gap-5 md:grid-cols-2">
+        <section className="relative grid gap-5 md:grid-cols-2">
+          {countdown !== null && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+              <span
+                className="animate-countdown-pop text-[min(25vw,180px)] font-black tabular-nums text-slate-900 drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]"
+                style={{ textShadow: "0 0 40px white, 0 4px 0 #0f172a" }}
+              >
+                {countdown}
+              </span>
+            </div>
+          )}
           <article className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a]">
             <header className="flex items-center justify-between">
               <h2 className="text-lg font-black uppercase">Left: Character</h2>
