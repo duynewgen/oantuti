@@ -56,12 +56,6 @@ const SCRIPT_URLS = [
   "https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js",
 ];
 
-const MOVE_EMOJI: Record<Move, string> = {
-  rock: "✊",
-  paper: "✋",
-  scissors: "✌️",
-};
-
 function getRoundResult(player: Move, bot: Move): RoundResult {
   if (player === bot) {
     return "draw";
@@ -108,7 +102,6 @@ function pickAiMove(history: Move[]): Move {
   const predictedPlayer = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
     "rock") as Move;
 
-  // 70% strategic counter, 30% random for unpredictability.
   if (Math.random() < 0.7) {
     return getCounterMove(predictedPlayer);
   }
@@ -173,6 +166,16 @@ function loadScript(src: string): Promise<void> {
     script.onerror = () => reject(new Error(`Failed to load ${src}`));
     document.body.appendChild(script);
   });
+}
+
+function getSpriteStateClass(state: OpponentState): string {
+  if (state === "thinking") {
+    return "opponent-sprite-thinking";
+  }
+  if (state === "reveal") {
+    return "opponent-sprite-reveal";
+  }
+  return "opponent-sprite-idle";
 }
 
 export default function Home() {
@@ -342,20 +345,16 @@ export default function Home() {
           } else if (!roundLockRef.current) {
             setStatus(`Detected ${inferred}. Hold steady to lock your move.`);
           }
-        } else {
-          if (!roundLockRef.current) {
-            stableCountRef.current = 0;
-            stableMoveRef.current = null;
-            setStatus("Hand found. Show a clear Rock, Paper, or Scissors sign.");
-          }
-        }
-      } else {
-        if (!roundLockRef.current) {
-          setPlayerMove(null);
+        } else if (!roundLockRef.current) {
           stableCountRef.current = 0;
           stableMoveRef.current = null;
-          setStatus("No hand detected. Move your hand into camera view.");
+          setStatus("Hand found. Show a clear Rock, Paper, or Scissors sign.");
         }
+      } else if (!roundLockRef.current) {
+        setPlayerMove(null);
+        stableCountRef.current = 0;
+        stableMoveRef.current = null;
+        setStatus("No hand detected. Move your hand into camera view.");
       }
 
       canvasCtx.restore();
@@ -478,29 +477,40 @@ export default function Home() {
             </header>
 
             <div className="mt-3 rounded-2xl border-2 border-slate-900 bg-[linear-gradient(135deg,#fecdd3,#dbeafe,#d9f99d)] p-4">
-              <div
-                className={`mx-auto flex h-64 w-full max-w-xs items-end justify-center rounded-2xl border-2 border-slate-900 bg-white px-3 pb-3 pt-2 ${
-                  opponentState === "thinking" ? "animate-pulse" : ""
-                }`}
-              >
+              <div className="relative mx-auto h-72 w-full max-w-sm overflow-hidden rounded-2xl border-2 border-slate-900 bg-[linear-gradient(180deg,#fefce8,#dbeafe_55%,#bbf7d0)]">
+                <div className="absolute inset-x-0 bottom-0 h-14 bg-[linear-gradient(90deg,#86efac,#facc15,#60a5fa)] opacity-60" />
+
                 {cartoonImage ? (
-                  <div className="relative w-full">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={cartoonImage}
-                      alt="Animated cartoon opponent"
-                      className={`h-48 w-full rounded-xl border-2 border-slate-900 object-cover transition-transform duration-300 ${
-                        opponentState === "thinking" ? "-translate-y-1 scale-[1.02]" : "translate-y-0"
-                      }`}
+                  <div className="opponent-stage">
+                    <div
+                      className={`opponent-sprite ${getSpriteStateClass(opponentState)}`}
+                      style={{ backgroundImage: `url(${cartoonImage})` }}
                     />
-                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-xl border-2 border-slate-900 bg-yellow-200 px-3 py-1 text-3xl shadow-sm">
-                      {animatedOpponentMove ? MOVE_EMOJI[animatedOpponentMove] : "🤖"}
-                    </div>
+                    <div
+                      className={`opponent-throw opponent-throw-left opponent-throw-${animatedOpponentMove ?? "rock"} ${
+                        opponentState === "thinking"
+                          ? "opponent-throw-thinking"
+                          : opponentState === "reveal"
+                            ? "opponent-throw-reveal"
+                            : ""
+                      }`}
+                      style={{ backgroundImage: `url(${cartoonImage})` }}
+                    />
+                    <div
+                      className={`opponent-throw opponent-throw-right opponent-throw-${animatedOpponentMove ?? "rock"} ${
+                        opponentState === "thinking"
+                          ? "opponent-throw-thinking"
+                          : opponentState === "reveal"
+                            ? "opponent-throw-reveal"
+                            : ""
+                      }`}
+                      style={{ backgroundImage: `url(${cartoonImage})` }}
+                    />
                   </div>
                 ) : (
-                  <p className="text-center text-sm font-semibold text-slate-500">
-                    Upload an image to activate your AI character.
-                  </p>
+                  <div className="flex h-full items-center justify-center px-6 text-center text-sm font-semibold text-slate-600">
+                    Upload a character image to animate it into a live opponent.
+                  </div>
                 )}
               </div>
             </div>
