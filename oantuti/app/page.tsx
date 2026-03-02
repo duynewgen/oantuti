@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Move = "rock" | "paper" | "scissors";
 type RoundResult = "win" | "lose" | "draw";
+type OpponentState = "idle" | "thinking" | "reveal";
 
 type Landmark = {
   x: number;
@@ -77,6 +78,44 @@ function getRoundResult(player: Move, bot: Move): RoundResult {
   return "lose";
 }
 
+function getCounterMove(move: Move): Move {
+  if (move === "rock") {
+    return "paper";
+  }
+
+  if (move === "paper") {
+    return "scissors";
+  }
+
+  return "rock";
+}
+
+function pickAiMove(history: Move[]): Move {
+  const fallback: Move[] = ["rock", "paper", "scissors"];
+
+  if (history.length === 0) {
+    return fallback[Math.floor(Math.random() * fallback.length)];
+  }
+
+  const counts = history.reduce(
+    (acc, move) => {
+      acc[move] += 1;
+      return acc;
+    },
+    { rock: 0, paper: 0, scissors: 0 },
+  );
+
+  const predictedPlayer = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+    "rock") as Move;
+
+  // 70% strategic counter, 30% random for unpredictability.
+  if (Math.random() < 0.7) {
+    return getCounterMove(predictedPlayer);
+  }
+
+  return fallback[Math.floor(Math.random() * fallback.length)];
+}
+
 function getFingerUp(landmarks: Landmark[], tip: number, pip: number): boolean {
   return landmarks[tip].y < landmarks[pip].y;
 }
@@ -106,11 +145,6 @@ function inferMove(landmarks: Landmark[]): Move | null {
   }
 
   return null;
-}
-
-function randomMove(): Move {
-  const choices: Move[] = ["rock", "paper", "scissors"];
-  return choices[Math.floor(Math.random() * choices.length)];
 }
 
 function loadScript(src: string): Promise<void> {
@@ -149,6 +183,11 @@ export default function Home() {
   const stableCountRef = useRef(0);
   const stableMoveRef = useRef<Move | null>(null);
   const roundLockRef = useRef(false);
+  const resetTimerRef = useRef<number | null>(null);
+  const revealTimerRef = useRef<number | null>(null);
+  const animateTimerRef = useRef<number | null>(null);
+  const fileUrlRef = useRef<string | null>(null);
+  const playerHistoryRef = useRef<Move[]>([]);
 
   const [scriptsReady, setScriptsReady] = useState(false);
   const [playerMove, setPlayerMove] = useState<Move | null>(null);
@@ -159,6 +198,8 @@ export default function Home() {
   const [botScore, setBotScore] = useState(0);
   const [draws, setDraws] = useState(0);
   const [cartoonImage, setCartoonImage] = useState<string | null>(null);
+  const [opponentState, setOpponentState] = useState<OpponentState>("idle");
+  const [animatedOpponentMove, setAnimatedOpponentMove] = useState<Move | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,7 +216,7 @@ export default function Home() {
         }
       } catch {
         if (!cancelled) {
-          setStatus("Failed to load computer vision scripts. Check your internet and refresh.");
+          setStatus("Failed to load CV scripts. Check internet and refresh.");
         }
       }
     })();
@@ -195,7 +236,6 @@ export default function Home() {
     const canvasCtx = canvasElement.getContext("2d");
 
     if (!canvasCtx) {
-      console.error("Could not access canvas context.");
       return;
     }
 
@@ -235,7 +275,6 @@ export default function Home() {
         const inferred = inferMove(hand);
 
         if (inferred) {
-          setStatus(`Detected: ${inferred}. Hold steady to lock in move...`);
           setPlayerMove(inferred);
 
           if (stableMoveRef.current === inferred) {
@@ -247,38 +286,76 @@ export default function Home() {
 
           if (stableCountRef.current >= 12 && !roundLockRef.current) {
             roundLockRef.current = true;
-            const opponent = randomMove();
-            const round = getRoundResult(inferred, opponent);
+            playerHistoryRef.current = [...playerHistoryRef.current.slice(-5), inferred];
 
-            setBotMove(opponent);
-            setResult(round);
+            setStatus("Move locked. Opponent AI is thinking...");
+            setOpponentState("thinking");
 
-            if (round === "win") {
-              setPlayerScore((prev) => prev + 1);
-            } else if (round === "lose") {
-              setBotScore((prev) => prev + 1);
-            } else {
-              setDraws((prev) => prev + 1);
+            if (animateTimerRef.current) {
+              window.clearInterval(animateTimerRef.current);
             }
 
-            setStatus(`Round done: You ${round}. Show a new hand sign for next round.`);
+            animateTimerRef.current = window.setInterval(() => {
+              const choices: Move[] = ["rock", "paper", "scissors"];
+              setAnimatedOpponentMove(choices[Math.floor(Math.random() * choices.length)]);
+            }, 170);
 
-            window.setTimeout(() => {
-              stableCountRef.current = 0;
-              stableMoveRef.current = null;
-              roundLockRef.current = false;
+            if (revealTimerRef.current) {
+              window.clearTimeout(revealTimerRef.current);
+            }
+
+            revealTimerRef.current = window.setTimeout(() => {
+              if (animateTimerRef.current) {
+                window.clearInterval(animateTimerRef.current);
+                animateTimerRef.current = null;
+              }
+
+              const opponent = pickAiMove(playerHistoryRef.current);
+              const round = getRoundResult(inferred, opponent);
+
+              setBotMove(opponent);
+              setAnimatedOpponentMove(opponent);
+              setOpponentState("reveal");
+              setResult(round);
+
+              if (round === "win") {
+                setPlayerScore((prev) => prev + 1);
+              } else if (round === "lose") {
+                setBotScore((prev) => prev + 1);
+              } else {
+                setDraws((prev) => prev + 1);
+              }
+
+              setStatus(`Round done: You ${round}. Change gesture for next round.`);
+
+              if (resetTimerRef.current) {
+                window.clearTimeout(resetTimerRef.current);
+              }
+
+              resetTimerRef.current = window.setTimeout(() => {
+                stableCountRef.current = 0;
+                stableMoveRef.current = null;
+                roundLockRef.current = false;
+                setOpponentState("idle");
+              }, 1200);
             }, 1300);
+          } else if (!roundLockRef.current) {
+            setStatus(`Detected ${inferred}. Hold steady to lock your move.`);
           }
         } else {
-          stableCountRef.current = 0;
-          stableMoveRef.current = null;
-          setStatus("Hand found. Show a clear Rock, Paper, or Scissors sign.");
+          if (!roundLockRef.current) {
+            stableCountRef.current = 0;
+            stableMoveRef.current = null;
+            setStatus("Hand found. Show a clear Rock, Paper, or Scissors sign.");
+          }
         }
       } else {
-        setPlayerMove(null);
-        stableCountRef.current = 0;
-        stableMoveRef.current = null;
-        setStatus("No hand detected. Move your hand into camera view.");
+        if (!roundLockRef.current) {
+          setPlayerMove(null);
+          stableCountRef.current = 0;
+          stableMoveRef.current = null;
+          setStatus("No hand detected. Move your hand into camera view.");
+        }
       }
 
       canvasCtx.restore();
@@ -297,14 +374,30 @@ export default function Home() {
     });
 
     cameraRef.current = camera;
-
     camera.start();
 
     return () => {
       cameraRef.current?.stop?.();
       cameraRef.current = null;
+      if (resetTimerRef.current) {
+        window.clearTimeout(resetTimerRef.current);
+      }
+      if (revealTimerRef.current) {
+        window.clearTimeout(revealTimerRef.current);
+      }
+      if (animateTimerRef.current) {
+        window.clearInterval(animateTimerRef.current);
+      }
     };
   }, [scriptsReady]);
+
+  useEffect(() => {
+    return () => {
+      if (fileUrlRef.current) {
+        URL.revokeObjectURL(fileUrlRef.current);
+      }
+    };
+  }, []);
 
   const resultText = useMemo(() => {
     if (!result) {
@@ -316,11 +409,23 @@ export default function Home() {
     }
 
     if (result === "lose") {
-      return "Cartoon wins this round";
+      return "Opponent wins this round";
     }
 
     return "It is a draw";
   }, [result]);
+
+  const opponentLabel = useMemo(() => {
+    if (opponentState === "thinking") {
+      return "AI thinking";
+    }
+
+    if (opponentState === "reveal") {
+      return "Move locked";
+    }
+
+    return "Ready";
+  }, [opponentState]);
 
   const onCartoonUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -328,90 +433,122 @@ export default function Home() {
       return;
     }
 
+    if (fileUrlRef.current) {
+      URL.revokeObjectURL(fileUrlRef.current);
+    }
+
     const objectUrl = URL.createObjectURL(file);
+    fileUrlRef.current = objectUrl;
     setCartoonImage(objectUrl);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-100 via-sky-100 to-lime-100 px-4 py-8 text-slate-900 md:px-8">
-      <main className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[2fr_1fr]">
-        <section className="overflow-hidden rounded-3xl border-4 border-slate-900 bg-white shadow-[10px_10px_0_#0f172a]">
-          <div className="border-b-4 border-slate-900 bg-yellow-300 p-4">
-            <h1 className="text-2xl font-black uppercase tracking-wide md:text-3xl">Cartoon RPS Arena</h1>
-            <p className="mt-1 text-sm font-semibold md:text-base">Show your hand sign to the camera and battle your uploaded cartoon.</p>
-          </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#fef08a,_#bfdbfe_45%,_#86efac)] px-4 py-6 text-slate-900 md:px-8">
+      <main className="mx-auto w-full max-w-6xl space-y-5">
+        <section className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a] md:p-6">
+          <h1 className="text-2xl font-black uppercase tracking-wide md:text-3xl">Cartoon AI RPS Battle</h1>
+          <p className="mt-1 text-sm font-semibold text-slate-700 md:text-base">
+            Upload a character image and it becomes your animated AI opponent.
+          </p>
 
-          <div className="relative bg-slate-950">
-            <video ref={videoRef} className="hidden" playsInline />
-            <canvas ref={canvasRef} width={960} height={720} className="aspect-video w-full object-cover" />
-
-            <div className="absolute left-3 top-3 rounded-xl border-2 border-slate-900 bg-white/90 px-3 py-1 text-xs font-bold uppercase md:text-sm">
-              {scriptsReady ? "camera on" : "camera off"}
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border-2 border-slate-900 bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase">Upload character</p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={onCartoonUpload}
+                className="mt-2 block w-full rounded-xl border-2 border-slate-900 bg-white px-3 py-2 text-sm"
+              />
             </div>
-
-            <div className="absolute bottom-3 left-3 right-3 rounded-2xl border-2 border-slate-900 bg-white/95 p-3 text-xs font-semibold md:text-sm">
-              {status}
+            <div className="rounded-2xl border-2 border-slate-900 bg-lime-100 p-3">
+              <p className="text-xs font-bold uppercase">Live status</p>
+              <p className="mt-2 text-sm font-bold md:text-base">{status}</p>
             </div>
           </div>
         </section>
 
-        <aside className="space-y-4">
-          <section className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a]">
-            <h2 className="text-lg font-black uppercase">1. Upload Cartoon</h2>
-            <p className="mt-2 text-sm font-medium text-slate-700">Use any image: Tom, Jerry, Phineas, Ferb, or your own drawing.</p>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={onCartoonUpload}
-              className="mt-3 block w-full rounded-xl border-2 border-slate-900 bg-white px-3 py-2 text-sm"
-            />
-            <div className="mt-3 overflow-hidden rounded-2xl border-2 border-slate-900 bg-slate-100">
-              {cartoonImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={cartoonImage} alt="Uploaded cartoon opponent" className="h-44 w-full object-cover" />
-              ) : (
-                <div className="flex h-44 items-center justify-center px-4 text-center text-sm font-semibold text-slate-500">
-                  Upload a character image to spawn your opponent.
-                </div>
-              )}
-            </div>
-          </section>
+        <section className="grid gap-5 md:grid-cols-2">
+          <article className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a]">
+            <header className="flex items-center justify-between">
+              <h2 className="text-lg font-black uppercase">Left: Character</h2>
+              <span className="rounded-lg border-2 border-slate-900 bg-pink-100 px-2 py-1 text-xs font-bold uppercase">
+                {opponentLabel}
+              </span>
+            </header>
 
-          <section className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a]">
-            <h2 className="text-lg font-black uppercase">2. Live Round</h2>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border-2 border-slate-900 bg-sky-100 p-3 text-center">
-                <p className="text-xs font-bold uppercase">You</p>
-                <p className="mt-2 text-4xl">{playerMove ? MOVE_EMOJI[playerMove] : "❔"}</p>
-                <p className="mt-1 text-sm font-semibold capitalize">{playerMove ?? "waiting"}</p>
-              </div>
-              <div className="rounded-2xl border-2 border-slate-900 bg-pink-100 p-3 text-center">
-                <p className="text-xs font-bold uppercase">Cartoon</p>
-                <p className="mt-2 text-4xl">{botMove ? MOVE_EMOJI[botMove] : "🎲"}</p>
-                <p className="mt-1 text-sm font-semibold capitalize">{botMove ?? "not played"}</p>
+            <div className="mt-3 rounded-2xl border-2 border-slate-900 bg-[linear-gradient(135deg,#fecdd3,#dbeafe,#d9f99d)] p-4">
+              <div
+                className={`mx-auto flex h-64 w-full max-w-xs items-end justify-center rounded-2xl border-2 border-slate-900 bg-white px-3 pb-3 pt-2 ${
+                  opponentState === "thinking" ? "animate-pulse" : ""
+                }`}
+              >
+                {cartoonImage ? (
+                  <div className="relative w-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={cartoonImage}
+                      alt="Animated cartoon opponent"
+                      className={`h-48 w-full rounded-xl border-2 border-slate-900 object-cover transition-transform duration-300 ${
+                        opponentState === "thinking" ? "-translate-y-1 scale-[1.02]" : "translate-y-0"
+                      }`}
+                    />
+                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-xl border-2 border-slate-900 bg-yellow-200 px-3 py-1 text-3xl shadow-sm">
+                      {animatedOpponentMove ? MOVE_EMOJI[animatedOpponentMove] : "🤖"}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-center text-sm font-semibold text-slate-500">
+                    Upload an image to activate your AI character.
+                  </p>
+                )}
               </div>
             </div>
-            <p className="mt-3 rounded-xl border-2 border-slate-900 bg-lime-200 px-3 py-2 text-center text-sm font-bold">{resultText}</p>
-          </section>
 
-          <section className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a]">
-            <h2 className="text-lg font-black uppercase">Scoreboard</h2>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl border-2 border-slate-900 bg-sky-100 p-2">
-                <p className="text-xs font-bold uppercase">You</p>
-                <p className="text-2xl font-black">{playerScore}</p>
-              </div>
-              <div className="rounded-xl border-2 border-slate-900 bg-pink-100 p-2">
-                <p className="text-xs font-bold uppercase">Cartoon</p>
-                <p className="text-2xl font-black">{botScore}</p>
-              </div>
-              <div className="rounded-xl border-2 border-slate-900 bg-zinc-100 p-2">
-                <p className="text-xs font-bold uppercase">Draw</p>
-                <p className="text-2xl font-black">{draws}</p>
-              </div>
+            <p className="mt-4 rounded-xl border-2 border-slate-900 bg-amber-100 px-3 py-2 text-center text-sm font-bold">
+              Opponent move: {botMove ? botMove : "not played"}
+            </p>
+          </article>
+
+          <article className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a]">
+            <header className="flex items-center justify-between">
+              <h2 className="text-lg font-black uppercase">Right: You</h2>
+              <span className="rounded-lg border-2 border-slate-900 bg-sky-100 px-2 py-1 text-xs font-bold uppercase">
+                Hand tracking
+              </span>
+            </header>
+
+            <div className="relative mt-3 overflow-hidden rounded-2xl border-2 border-slate-900 bg-slate-950">
+              <video ref={videoRef} className="hidden" playsInline />
+              <canvas ref={canvasRef} width={960} height={720} className="aspect-video w-full object-cover" />
             </div>
-          </section>
-        </aside>
+
+            <p className="mt-4 rounded-xl border-2 border-slate-900 bg-cyan-100 px-3 py-2 text-center text-sm font-bold">
+              Your move: {playerMove ? playerMove : "waiting"}
+            </p>
+          </article>
+        </section>
+
+        <section className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a]">
+          <h2 className="text-lg font-black uppercase">Round + Scoreboard</h2>
+          <p className="mt-3 rounded-xl border-2 border-slate-900 bg-lime-200 px-3 py-2 text-center text-sm font-bold md:text-base">
+            {resultText}
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl border-2 border-slate-900 bg-sky-100 p-2">
+              <p className="text-xs font-bold uppercase">You</p>
+              <p className="text-2xl font-black">{playerScore}</p>
+            </div>
+            <div className="rounded-xl border-2 border-slate-900 bg-pink-100 p-2">
+              <p className="text-xs font-bold uppercase">Character</p>
+              <p className="text-2xl font-black">{botScore}</p>
+            </div>
+            <div className="rounded-xl border-2 border-slate-900 bg-zinc-100 p-2">
+              <p className="text-xs font-bold uppercase">Draw</p>
+              <p className="text-2xl font-black">{draws}</p>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );
