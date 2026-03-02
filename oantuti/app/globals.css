@@ -24,27 +24,20 @@ body {
 .opponent-sprite {
   position: absolute;
   left: 50%;
-  top: 12%;
-  width: min(62%, 240px);
-  aspect-ratio: 3 / 4;
+  top: 5%;
+  width: 90%;
+  max-width: 360px;
+  height: 85%;
   transform: translateX(-50%);
-  border: 3px solid #0f172a;
-  border-radius: 20px;
-  background-size: cover;
+  background-size: contain;
   background-position: center;
-  filter: drop-shadow(0 10px 14px rgb(15 23 42 / 0.22));
+  background-repeat: no-repeat;
 }
 
-.opponent-sprite-idle {
-  animation: spriteIdle 1.6s ease-in-out infinite;
-}
-
-.opponent-sprite-thinking {
-  animation: spriteThinking 0.44s ease-in-out infinite;
-}
-
+.opponent-sprite-idle,
+.opponent-sprite-thinking,
 .opponent-sprite-reveal {
-  animation: spriteReveal 0.3s ease-out 1;
+  /* No animation - image stays static */
 }
 
 @keyframes countdownPop {
@@ -66,34 +59,3 @@ body {
   animation: countdownPop 0.5s ease-out;
 }
 
-@keyframes spriteIdle {
-  0%,
-  100% {
-    transform: translateX(-50%) translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateX(-50%) translateY(-4px) rotate(-0.6deg);
-  }
-}
-
-@keyframes spriteThinking {
-  0%,
-  100% {
-    transform: translateX(-50%) translateY(0px) rotate(0deg) scale(1);
-  }
-  33% {
-    transform: translateX(-50%) translateY(-5px) rotate(-1.4deg) scale(1.02);
-  }
-  66% {
-    transform: translateX(-50%) translateY(-2px) rotate(1.5deg) scale(1.01);
-  }
-}
-
-@keyframes spriteReveal {
-  0% {
-    transform: translateX(-50%) translateY(-2px) scale(1.03);
-  }
-  100% {
-    transform: translateX(-50%) translateY(0px) scale(1);
-  }
-}

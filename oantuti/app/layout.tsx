@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Cartoon RPS Arena",
-  description: "Prototype: play rock-paper-scissors against a cartoon image using webcam hand tracking.",
+  title: "Oantuti - Rock, Paper, Scissors",
+  description: "Play rock-paper-scissors against your favorite cartoon character!",
 };
 
 export default function RootLayout({
