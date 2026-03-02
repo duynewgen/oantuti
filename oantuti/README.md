@@ -1,5 +1,18 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Cartoon AI RPS Battle
+
+Upload a character image (e.g. Tom from Tom & Jerry). AI (via [FAL.ai](https://fal.ai) Fibo Edit) generates three versions with different hand poses: rock, paper, and scissors. Play rock-paper-scissors against your animated character using hand tracking.
+
+## Setup
+
+1. Copy `env.example` to `.env.local`.
+2. Add your [FAL.ai API key](https://fal.ai/dashboard/keys) to `.env.local`:
+   ```
+   FAL_KEY=your_fal_api_key_here
+   ```
+3. Without `FAL_KEY`, the app falls back to the original image (no AI-generated poses).
+
 ## Getting Started
 
 First, run the development server:

@@ -35,41 +35,6 @@ body {
   filter: drop-shadow(0 10px 14px rgb(15 23 42 / 0.22));
 }
 
-.opponent-throw {
-  position: absolute;
-  bottom: 18%;
-  width: min(23%, 82px);
-  aspect-ratio: 1 / 1;
-  border: 3px solid #0f172a;
-  background-size: cover;
-  background-position: center;
-  box-shadow: 0 6px 0 rgb(15 23 42 / 0.22);
-}
-
-.opponent-throw-left {
-  left: 20%;
-}
-
-.opponent-throw-right {
-  right: 20%;
-  transform: scaleX(-1);
-}
-
-.opponent-throw-rock {
-  border-radius: 999px;
-  clip-path: circle(48% at 50% 50%);
-}
-
-.opponent-throw-paper {
-  border-radius: 14px;
-  clip-path: inset(0 round 12px);
-}
-
-.opponent-throw-scissors {
-  border-radius: 14px;
-  clip-path: polygon(8% 100%, 40% 42%, 10% 8%, 35% 0, 52% 32%, 72% 0, 94% 10%, 64% 42%, 92% 100%);
-}
-
 .opponent-sprite-idle {
   animation: spriteIdle 1.6s ease-in-out infinite;
 }
@@ -80,14 +45,6 @@ body {
 
 .opponent-sprite-reveal {
   animation: spriteReveal 0.3s ease-out 1;
-}
-
-.opponent-throw-thinking {
-  animation: throwThinking 0.2s ease-in-out infinite;
-}
-
-.opponent-throw-reveal {
-  animation: throwReveal 0.25s ease-out 1;
 }
 
 @keyframes spriteIdle {
@@ -119,26 +76,5 @@ body {
   }
   100% {
     transform: translateX(-50%) translateY(0px) scale(1);
-  }
-}
-
-@keyframes throwThinking {
-  0%,
-  100% {
-    margin-bottom: 0;
-  }
-  50% {
-    margin-bottom: 10px;
-  }
-}
-
-@keyframes throwReveal {
-  0% {
-    margin-bottom: 18px;
-    scale: 1.09;
-  }
-  100% {
-    margin-bottom: 0;
-    scale: 1;
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Move = "rock" | "paper" | "scissors";
 type RoundResult = "win" | "lose" | "draw";
@@ -201,6 +201,9 @@ export default function Home() {
   const [botScore, setBotScore] = useState(0);
   const [draws, setDraws] = useState(0);
   const [cartoonImage, setCartoonImage] = useState<string | null>(null);
+  const [characterPoses, setCharacterPoses] = useState<Record<Move, string> | null>(null);
+  const [generationStatus, setGenerationStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [opponentState, setOpponentState] = useState<OpponentState>("idle");
   const [animatedOpponentMove, setAnimatedOpponentMove] = useState<Move | null>(null);
 
@@ -426,20 +429,45 @@ export default function Home() {
     return "Ready";
   }, [opponentState]);
 
-  const onCartoonUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
+  const onCartoonUpload = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-    if (fileUrlRef.current) {
-      URL.revokeObjectURL(fileUrlRef.current);
-    }
+      if (fileUrlRef.current) {
+        URL.revokeObjectURL(fileUrlRef.current);
+      }
 
-    const objectUrl = URL.createObjectURL(file);
-    fileUrlRef.current = objectUrl;
-    setCartoonImage(objectUrl);
-  };
+      const objectUrl = URL.createObjectURL(file);
+      fileUrlRef.current = objectUrl;
+      setCartoonImage(objectUrl);
+      setCharacterPoses(null);
+      setGenerationStatus("generating");
+      setGenerationError(null);
+
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
+        const res = await fetch("/api/generate-character-poses", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error ?? `Generation failed (${res.status})`);
+        }
+
+        const poses = (await res.json()) as Record<Move, string>;
+        setCharacterPoses(poses);
+        setGenerationStatus("ready");
+      } catch (err) {
+        setGenerationStatus("error");
+        setGenerationError(err instanceof Error ? err.message : "Failed to generate character poses");
+      }
+    },
+    [],
+  );
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#fef08a,_#bfdbfe_45%,_#86efac)] px-4 py-6 text-slate-900 md:px-8">
@@ -447,7 +475,7 @@ export default function Home() {
         <section className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a] md:p-6">
           <h1 className="text-2xl font-black uppercase tracking-wide md:text-3xl">Cartoon AI RPS Battle</h1>
           <p className="mt-1 text-sm font-semibold text-slate-700 md:text-base">
-            Upload a character image and it becomes your animated AI opponent.
+            Upload a character (e.g. Tom). AI animates its hands to play rock, paper, scissors.
           </p>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -484,32 +512,32 @@ export default function Home() {
                   <div className="opponent-stage">
                     <div
                       className={`opponent-sprite ${getSpriteStateClass(opponentState)}`}
-                      style={{ backgroundImage: `url(${cartoonImage})` }}
+                      style={{
+                        backgroundImage: `url(${
+                          characterPoses
+                            ? characterPoses[animatedOpponentMove ?? "rock"]
+                            : cartoonImage
+                        })`,
+                      }}
                     />
-                    <div
-                      className={`opponent-throw opponent-throw-left opponent-throw-${animatedOpponentMove ?? "rock"} ${
-                        opponentState === "thinking"
-                          ? "opponent-throw-thinking"
-                          : opponentState === "reveal"
-                            ? "opponent-throw-reveal"
-                            : ""
-                      }`}
-                      style={{ backgroundImage: `url(${cartoonImage})` }}
-                    />
-                    <div
-                      className={`opponent-throw opponent-throw-right opponent-throw-${animatedOpponentMove ?? "rock"} ${
-                        opponentState === "thinking"
-                          ? "opponent-throw-thinking"
-                          : opponentState === "reveal"
-                            ? "opponent-throw-reveal"
-                            : ""
-                      }`}
-                      style={{ backgroundImage: `url(${cartoonImage})` }}
-                    />
+                    {generationStatus === "generating" && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-slate-900/70 text-white">
+                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-white/30 border-t-white" />
+                        <p className="text-sm font-bold">AI animating character&apos;s hands...</p>
+                        <p className="text-xs opacity-80">Generating rock, paper, scissors poses</p>
+                      </div>
+                    )}
+                    {generationStatus === "error" && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-red-900/80 p-4 text-white">
+                        <p className="text-sm font-bold">Generation failed</p>
+                        <p className="text-xs text-center opacity-90">{generationError}</p>
+                        <p className="text-xs opacity-70">Showing original image. Add FAL_KEY to .env.local to enable AI.</p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center px-6 text-center text-sm font-semibold text-slate-600">
-                    Upload a character image to animate it into a live opponent.
+                    Upload a character image. AI will animate its hands for rock, paper, scissors.
                   </div>
                 )}
               </div>
