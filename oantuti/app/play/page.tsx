@@ -15,6 +15,22 @@ import {
 
 const SESSION_KEY = "oantuti-character-poses";
 
+const SOUND_WIN = "https://www.myinstants.com/media/sounds/win31.mp3";
+const SOUND_LOSE =
+  "https://www.myinstants.com/media/sounds/fahhhhhhhhhhhhhh.mp3";
+const SOUND_DRAW =
+  "https://www.myinstants.com/media/sounds/aww-sound-effect_OII2eTh.mp3";
+
+function playSound(url: string) {
+  try {
+    const audio = new Audio(url);
+    audio.volume = 0.7;
+    audio.play().catch(() => {});
+  } catch {
+    // Ignore audio errors
+  }
+}
+
 export default function PlayPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -179,9 +195,16 @@ export default function PlayPage() {
       setOpponentState("reveal");
       setResult(round);
 
-      if (round === "win") setPlayerScore((p) => p + 1);
-      else if (round === "lose") setBotScore((p) => p + 1);
-      else setDraws((p) => p + 1);
+      if (round === "win") {
+        setPlayerScore((p) => p + 1);
+        playSound(SOUND_WIN);
+      } else if (round === "lose") {
+        setBotScore((p) => p + 1);
+        playSound(SOUND_LOSE);
+      } else {
+        setDraws((p) => p + 1);
+        playSound(SOUND_DRAW);
+      }
 
       setStatus(`Round done: You ${round}!`);
       isRevealingRef.current = true;
@@ -232,8 +255,8 @@ export default function PlayPage() {
   }, [canStart, roundsCompleted]);
 
   const resultText = useMemo(() => {
-    if (result === "win") return "You win this round";
-    if (result === "lose") return "Opponent wins this round";
+    if (result === "win") return "You win this round! Lfgggggggg!";
+    if (result === "lose") return "You lose! Boooo!";
     if (result === "draw") return "It is a draw";
     if (countdown !== null) return "Get ready!";
     if (isRevealing) return "Reveal!";
@@ -259,6 +282,16 @@ export default function PlayPage() {
       <main className="mx-auto w-full max-w-6xl space-y-5">
         <PlayHeader status={status} />
 
+        <ScoreboardSection
+          resultText={resultText}
+          playerScore={playerScore}
+          botScore={botScore}
+          draws={draws}
+          canStart={canStart}
+          roundsCompleted={roundsCompleted}
+          onStartCountdown={startCountdown}
+        />
+
         <section className="relative grid gap-5 md:grid-cols-2">
           {countdown !== null && <CountdownOverlay countdown={countdown} />}
           <CharacterCard
@@ -274,16 +307,6 @@ export default function PlayPage() {
             playerMove={playerMove}
           />
         </section>
-
-        <ScoreboardSection
-          resultText={resultText}
-          playerScore={playerScore}
-          botScore={botScore}
-          draws={draws}
-          canStart={canStart}
-          roundsCompleted={roundsCompleted}
-          onStartCountdown={startCountdown}
-        />
       </main>
     </div>
   );

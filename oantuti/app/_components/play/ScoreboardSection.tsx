@@ -20,7 +20,7 @@ export function ScoreboardSection({
   return (
     <section className="rounded-3xl border-4 border-slate-900 bg-white p-4 shadow-[8px_8px_0_#0f172a]">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg font-black uppercase">Round + Scoreboard</h2>
+        <h2 className="text-lg font-black uppercase">Round + Scoreboard (Volume up for some fun stuff)</h2>
         {canStart && (
           <button
             type="button"
@@ -35,10 +35,6 @@ export function ScoreboardSection({
         {resultText}
       </p>
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-xl border-2 border-slate-900 bg-sky-100 p-2">
-          <p className="text-xs font-bold uppercase">You</p>
-          <p className="text-2xl font-black">{playerScore}</p>
-        </div>
         <div className="rounded-xl border-2 border-slate-900 bg-pink-100 p-2">
           <p className="text-xs font-bold uppercase">Character</p>
           <p className="text-2xl font-black">{botScore}</p>
@@ -46,6 +42,10 @@ export function ScoreboardSection({
         <div className="rounded-xl border-2 border-slate-900 bg-zinc-100 p-2">
           <p className="text-xs font-bold uppercase">Draw</p>
           <p className="text-2xl font-black">{draws}</p>
+        </div>
+        <div className="rounded-xl border-2 border-slate-900 bg-sky-100 p-2">
+          <p className="text-xs font-bold uppercase">You</p>
+          <p className="text-2xl font-black">{playerScore}</p>
         </div>
       </div>
     </section>
