@@ -1,13 +1,17 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CharacterPoses } from "@/app/_components/types";
 import { SESSION_KEY } from "@/app/_components/play/sounds";
 import {
   HomepageHero,
   CharacterUploadSection,
   HandTestSection,
+  PastSelectionSection,
   useHomepageHandTest,
+  getSavedCharacters,
+  addSavedCharacter,
+  removeSavedCharacter,
 } from "@/app/_components/homepage";
 
 export default function HomePage() {
@@ -19,8 +23,13 @@ export default function HomePage() {
     "idle" | "generating" | "ready" | "error"
   >("idle");
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [savedCharacters, setSavedCharacters] = useState<ReturnType<typeof getSavedCharacters>>([]);
 
   const { videoRef, canvasRef, testReady, testStatus, testMove } = useHomepageHandTest();
+
+  useEffect(() => {
+    setSavedCharacters(getSavedCharacters());
+  }, []);
 
   const onImageUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,6 +63,8 @@ export default function HomePage() {
         const poses = (await res.json()) as CharacterPoses;
         setCharacterPoses(poses);
         setGenerationStatus("ready");
+        addSavedCharacter(poses);
+        setSavedCharacters(getSavedCharacters());
       } catch (err) {
         setGenerationStatus("error");
         setGenerationError(
@@ -70,6 +81,11 @@ export default function HomePage() {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(characterPoses));
     }
   }, [characterPoses]);
+
+  const handleRemoveSaved = useCallback((id: string) => {
+    removeSavedCharacter(id);
+    setSavedCharacters(getSavedCharacters());
+  }, []);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[radial-gradient(circle_at_top,_#fef08a,_#bfdbfe_45%,_#86efac)] px-4 py-6 text-slate-900 md:px-8">
@@ -95,6 +111,11 @@ export default function HomePage() {
               testMove={testMove}
             />
           </div>
+
+          <PastSelectionSection
+            savedCharacters={savedCharacters}
+            onRemove={handleRemoveSaved}
+          />
 
           <p className="mt-8 text-center text-sm text-slate-600">
             &ldquo;Oantuti&rdquo; is the Vietnamese name of rock-paper-scissors, sounds like &ldquo;one, two, three&rdquo;.
