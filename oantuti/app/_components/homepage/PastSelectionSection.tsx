@@ -31,7 +31,7 @@ export function PastSelectionSection({
       ) : (
         <>
           <p className="text-xs text-slate-500">
-            Pick one to play without re-uploading or using quota again.
+            Revenge time? Choose one of your past opponents to fight again!
           </p>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {savedCharacters.map((saved) => (
