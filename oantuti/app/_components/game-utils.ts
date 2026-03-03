@@ -20,20 +20,62 @@ function getCounterMove(move: Move): Move {
   return "rock";
 }
 
-export function pickAiMove(history: Move[]): Move {
-  const fallback: Move[] = ["rock", "paper", "scissors"];
-  if (history.length === 0) {
-    return fallback[Math.floor(Math.random() * fallback.length)];
-  }
-  const counts = history.reduce(
+function getRandomMove(): Move {
+  const moves: Move[] = ["rock", "paper", "scissors"];
+  return moves[Math.floor(Math.random() * moves.length)];
+}
+
+function getMostFrequentMove(moves: Move[]): Move {
+  const counts = moves.reduce(
     (acc, move) => {
       acc[move] += 1;
       return acc;
     },
     { rock: 0, paper: 0, scissors: 0 },
   );
-  const predictedPlayer = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
-    "rock") as Move;
-  if (Math.random() < 0.7) return getCounterMove(predictedPlayer);
-  return fallback[Math.floor(Math.random() * fallback.length)];
+
+  return (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "rock") as Move;
+}
+
+// Smarter AI:
+// - Uses transition patterns between recent moves to predict the next player move.
+// - Strongly biases towards the counter move, with a small amount of randomness so it
+//   never feels completely deterministic.
+export function pickAiMove(history: Move[]): Move {
+  if (history.length === 0) {
+    return getRandomMove();
+  }
+
+  // Build a simple transition table: given previous move → distribution of next moves.
+  const transitions: Record<Move, { rock: number; paper: number; scissors: number }> = {
+    rock: { rock: 0, paper: 0, scissors: 0 },
+    paper: { rock: 0, paper: 0, scissors: 0 },
+    scissors: { rock: 0, paper: 0, scissors: 0 },
+  };
+
+  for (let i = 0; i < history.length - 1; i += 1) {
+    const from = history[i];
+    const to = history[i + 1];
+    transitions[from][to] += 1;
+  }
+
+  const lastMove = history[history.length - 1];
+  const transitionFromLast = transitions[lastMove];
+  const hasTransitionData =
+    transitionFromLast.rock + transitionFromLast.paper + transitionFromLast.scissors > 0;
+
+  const predictedPlayerMove: Move = hasTransitionData
+    ? (Object.entries(transitionFromLast).sort((a, b) => b[1] - a[1])[0]?.[0] || "rock") as Move
+    : getMostFrequentMove(history);
+
+  const optimalCounter = getCounterMove(predictedPlayerMove);
+
+  // Difficulty tuning:
+  // - 85% of the time: play the optimal counter (hard to beat).
+  // - 10% of the time: mirror the predicted move (keeps things interesting).
+  // - 5% of the time: fully random (prevents perfect predictability).
+  const roll = Math.random();
+  if (roll < 0.85) return optimalCounter;
+  if (roll < 0.95) return predictedPlayerMove;
+  return getRandomMove();
 }
