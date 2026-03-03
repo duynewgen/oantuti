@@ -95,6 +95,10 @@ export default function HomePage() {
               testMove={testMove}
             />
           </div>
+
+          <p className="mt-8 text-center text-sm text-slate-600">
+            &ldquo;Oantuti&rdquo; is the Vietnamese name of rock-paper-scissors, sounds like &ldquo;one, two, three&rdquo;.
+          </p>
         </section>
       </main>
     </div>

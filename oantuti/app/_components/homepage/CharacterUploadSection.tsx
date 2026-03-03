@@ -75,26 +75,11 @@ export function CharacterUploadSection({
           </>
         ) : (
           <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
-            <div className="rounded-full border-2 border-dashed border-slate-400 p-8">
-              <svg
-                className="mx-auto h-12 w-12 text-slate-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
-                />
-              </svg>
-            </div>
-            <p className="mt-4 text-sm font-semibold text-slate-600">
-              Upload a character image
+            <p className="mt-4 text-md font-semibold text-slate-600">
+              Upload an image of anyone or any character
             </p>
-            <p className="mt-1 text-xs text-slate-500">
-              AI will animate its hands for rock, paper, scissors
+            <p className="mt-1 text-sm text-slate-500">
+              Oantuti will magically animate your image into a character with hands for rock, paper, scissors!
             </p>
           </div>
         )}
