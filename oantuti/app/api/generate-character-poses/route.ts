@@ -19,6 +19,8 @@ const INSTRUCTIONS: Record<"rock" | "paper" | "scissors", string> = {
   scissors: "Replace the character's hands with both hands in scissors gesture: peace sign, index and middle fingers extended upward in a V shape, other fingers curled.",
 };
 
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+
 export async function POST(request: NextRequest) {
   if (!process.env.FAL_KEY) {
     return NextResponse.json(
@@ -39,6 +41,13 @@ export async function POST(request: NextRequest) {
     if (!file || !file.type.startsWith("image/")) {
       return NextResponse.json(
         { error: "Please provide a valid image file" },
+        { status: 400 },
+      );
+    }
+
+    if (file.size > MAX_FILE_BYTES) {
+      return NextResponse.json(
+        { error: "Image is too large. Use an image under 10MB." },
         { status: 400 },
       );
     }
@@ -67,24 +76,43 @@ export async function POST(request: NextRequest) {
     scissors: "",
   };
 
-  for (const move of ["rock", "paper", "scissors"] as const) {
-    try {
-      const result = await fal.subscribe(FAL_MODEL, {
-        input: {
-          image_url: imageUrl,
-          instruction: INSTRUCTIONS[move],
-        },
-      });
+  const maxRetries = 2; // first attempt + 1 retry on 500
 
-      const out = result.data as { image?: { url?: string } };
-      if (out?.image?.url) {
-        results[move] = out.image.url;
-      } else {
-        results[move] = imageUrl;
+  for (const move of ["rock", "paper", "scissors"] as const) {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const result = await fal.subscribe(FAL_MODEL, {
+          input: {
+            image_url: imageUrl,
+            instruction: INSTRUCTIONS[move],
+          },
+        });
+
+        const out = result.data as { image?: { url?: string } };
+        if (out?.image?.url) {
+          results[move] = out.image.url;
+        } else {
+          results[move] = imageUrl;
+        }
+        break;
+      } catch (err) {
+        const is500 =
+          err &&
+          typeof err === "object" &&
+          "status" in err &&
+          (err as { status?: number }).status === 500;
+        if (is500 && attempt < maxRetries - 1) {
+          await new Promise((r) => setTimeout(r, 2000)); // wait 2s before retry
+          continue;
+        }
+        return NextResponse.json(
+          {
+            error:
+              "There's something wrong with the image tho. Could we try another image?.",
+          },
+          { status: 502 }
+        );
       }
-    } catch (err) {
-      console.error(`FAL Fibo Edit failed for ${move}:`, err);
-      results[move] = imageUrl;
     }
   }
 

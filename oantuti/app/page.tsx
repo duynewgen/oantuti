@@ -36,6 +36,13 @@ export default function HomePage() {
       const file = event.target.files?.[0];
       if (!file) return;
 
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        setGenerationStatus("error");
+        setGenerationError("Image is too large. Use an image under 10MB.");
+        return;
+      }
+
       if (fileUrlRef.current) {
         URL.revokeObjectURL(fileUrlRef.current);
       }

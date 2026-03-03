@@ -66,9 +66,6 @@ export function CharacterUploadSection({
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-red-900/90 p-6 text-white">
                   <p className="text-sm font-bold">Generation failed</p>
                   <p className="text-center text-xs opacity-90">{generationError}</p>
-                  <p className="text-center text-xs opacity-70">
-                    Add FAL_KEY to .env.local to enable AI generation.
-                  </p>
                 </div>
               )}
             </div>
